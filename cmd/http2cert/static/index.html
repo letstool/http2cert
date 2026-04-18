@@ -1,0 +1,1756 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" sizes="512x512" href="/favicon.png">
+<title>Certificate Inspector — CERT</title>
+<style>
+  /* ── THEMES ── */
+  :root {
+    --bg:             #0a0e14;
+    --surface:        #0f1520;
+    --border:         #1e2d45;
+    --border-hi:      #2a4060;
+    --accent:         #00d4ff;
+    --accent2:        #0090cc;
+    --accent-dim:     #003a52;
+    --text:           #c8d8e8;
+    --text-dim:       #4a6480;
+    --text-mid:       #7a9ab8;
+    --ok:             #00b87a;
+    --ok-dim:         #003d2a;
+    --warn:           #ffb340;
+    --warn-dim:       #3d2a00;
+    --err:            #ff4e6a;
+    --err-dim:        #3d0010;
+    --grid-a:         rgba(30,45,69,0.30);
+    --grid-b:         rgba(30,45,69,0.15);
+    --radial:         rgba(0,180,255,0.07);
+    --panel-tint:     rgba(0,212,255,0.04);
+    --select-opt-bg:  #0f1520;
+    --raw-bg:         #070b10;
+    --focus-ring:     #00d4ff;
+    --mono: 'Courier New', 'Lucida Console', monospace;
+    --sans: system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+  }
+
+  [data-theme="light"] {
+    --bg:             #eef3f9;
+    --surface:        #ffffff;
+    --border:         #c8d8ec;
+    --border-hi:      #a0bcd8;
+    --accent:         #0070a0;
+    --accent2:        #005278;
+    --accent-dim:     #d4eaf8;
+    --text:           #152030;
+    --text-dim:       #7898b8;
+    --text-mid:       #3a6080;
+    --ok:             #006e48;
+    --ok-dim:         #d0f0e4;
+    --warn:           #8c5200;
+    --warn-dim:       #fff0d0;
+    --err:            #b0002a;
+    --err-dim:        #fde8ef;
+    --grid-a:         rgba(150,190,225,0.28);
+    --grid-b:         rgba(150,190,225,0.14);
+    --radial:         rgba(0,120,180,0.06);
+    --panel-tint:     rgba(0,112,160,0.04);
+    --select-opt-bg:  #ffffff;
+    --raw-bg:         #f4f8fc;
+    --focus-ring:     #005278;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── SKIP LINK ── */
+  .skip-link {
+    position: absolute; top: -100px; left: 16px; z-index: 9999;
+    background: var(--accent); color: var(--bg);
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
+    padding: 10px 18px; border-radius: 0 0 6px 6px;
+    text-decoration: none; letter-spacing: 0.08em; transition: top 0.2s;
+  }
+  .skip-link:focus { top: 0; outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+
+  /* ── FOCUS VISIBLE ── */
+  :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; border-radius: 3px; }
+  :focus:not(:focus-visible) { outline: none; }
+
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: var(--sans); min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 0 16px 60px;
+    background-image:
+      radial-gradient(ellipse 80% 40% at 50% -10%, var(--radial) 0%, transparent 70%),
+      repeating-linear-gradient(0deg,  transparent, transparent 39px, var(--grid-a) 40px),
+      repeating-linear-gradient(90deg, transparent, transparent 39px, var(--grid-b) 40px);
+    transition: background 0.3s, color 0.3s;
+  }
+
+  /* ── RTL ── */
+  [dir="rtl"] .panel-head::before { margin-left: 10px; margin-right: 0; }
+  [dir="rtl"] .lang-arrow         { left: 8px; right: auto; }
+  [dir="rtl"] .lang-select        { padding: 5px 10px 5px 26px; }
+  [dir="rtl"] select              { background-position: left 12px center; padding-left: 32px; padding-right: 12px; }
+  [dir="rtl"] .result-time        { margin-left: 0; margin-right: auto; }
+  [dir="rtl"] .theme-toggle       { flex-direction: row-reverse; }
+  [dir="rtl"] .cert-card-header   { flex-direction: row-reverse; }
+  [dir="rtl"] .cert-validity-badge { margin-left: 0; margin-right: auto; }
+
+  /* ── HEADER ── */
+  header {
+    width: 100%; max-width: 900px;
+    padding: 32px 0 24px;
+    display: flex; align-items: center; gap: 16px;
+    border-bottom: 1px solid var(--border); margin-bottom: 32px;
+    transition: border-color 0.3s;
+  }
+
+  .logo-shield { width: 38px; height: 42px; flex-shrink: 0; }
+  .logo-shield path   { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; transition: stroke 0.3s; }
+  .logo-shield rect   { fill: none; stroke: var(--accent); stroke-width: 1.3; transition: stroke 0.3s; }
+  .logo-shield line   { stroke: var(--accent); stroke-width: 1.4; stroke-linecap: round; transition: stroke 0.3s; }
+  .logo-shield circle { fill: none; stroke: var(--accent); stroke-width: 1.3; transition: stroke 0.3s; }
+  .logo-shield .seal  { fill: var(--accent); opacity: 0.85; stroke: none; transition: fill 0.3s; }
+
+  .header-text h1 {
+    font-family: var(--mono); font-size: 1.05rem; font-weight: 600;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--accent); transition: color 0.3s;
+  }
+  .header-text p {
+    font-size: 0.68rem; font-weight: 400;
+    color: var(--text-dim); letter-spacing: 0.07em;
+    text-transform: uppercase; margin-top: 3px; transition: color 0.3s;
+  }
+
+  .header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+  /* ── THEME TOGGLE ── */
+  .theme-toggle {
+    display: flex; align-items: center; gap: 7px; cursor: pointer;
+    border: 1px solid var(--border); background: transparent; border-radius: 20px;
+    padding: 5px 11px 5px 8px;
+    transition: border-color 0.2s, background 0.2s, color 0.2s;
+    color: var(--text-dim);
+  }
+  .theme-toggle:hover, .theme-toggle:focus-visible { border-color: var(--accent2); background: var(--accent-dim); color: var(--accent); }
+  .theme-icon { font-size: 0.85rem; line-height: 1; transition: transform 0.4s; }
+  .theme-toggle:hover .theme-icon { transform: rotate(20deg); }
+  .theme-track { width: 28px; height: 15px; background: var(--border); border-radius: 8px; position: relative; flex-shrink: 0; transition: background 0.3s; }
+  .theme-thumb { position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--text-dim); transition: transform 0.3s, background 0.3s; }
+  [data-theme="light"] .theme-track { background: var(--accent2); }
+  [data-theme="light"] .theme-thumb { background: #fff; transform: translateX(13px); }
+  .theme-label { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
+
+  /* ── LANGUAGE SELECTOR ── */
+  .lang-select-wrap { position: relative; display: flex; align-items: center; }
+  .lang-select {
+    appearance: none; -webkit-appearance: none; background: transparent;
+    border: 1px solid var(--border); border-radius: 4px;
+    color: var(--text-dim); font-family: var(--mono); font-size: 0.68rem;
+    letter-spacing: 0.08em; padding: 5px 26px 5px 10px;
+    cursor: pointer; outline: none; transition: border-color 0.2s, background 0.2s, color 0.2s; width: auto;
+  }
+  .lang-select:hover, .lang-select:focus-visible { border-color: var(--accent2); background: var(--accent-dim); color: var(--accent); outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .lang-select option { background: var(--select-opt-bg); color: var(--text); }
+  .lang-arrow { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--text-dim); font-size: 0.55rem; transition: color 0.2s; }
+  .lang-select-wrap:hover .lang-arrow { color: var(--accent); }
+
+  /* ── MAIN ── */
+  main { width: 100%; max-width: 900px; }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; overflow: hidden; margin-bottom: 20px;
+    transition: background 0.3s, border-color 0.3s;
+  }
+  .panel-head {
+    padding: 10px 18px; background: var(--panel-tint); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--mono); font-size: 0.66rem; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim);
+    transition: background 0.3s, border-color 0.3s, color 0.3s;
+  }
+  .panel-head::before {
+    content: ''; display: inline-block; width: 3px; height: 12px;
+    background: var(--accent); border-radius: 2px; flex-shrink: 0; transition: background 0.3s;
+  }
+  .panel-body { padding: 20px 22px; }
+
+  /* ── FORM ── */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group.full { grid-column: 1 / -1; }
+
+  label {
+    font-family: var(--mono); font-size: 0.63rem; font-weight: 500;
+    letter-spacing: 0.13em; text-transform: uppercase; color: var(--text-dim);
+    transition: color 0.3s; cursor: pointer;
+  }
+
+  input, select, textarea {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+    color: var(--text); font-family: var(--mono); font-size: 0.85rem;
+    padding: 9px 12px; outline: none; width: 100%;
+    appearance: none; -webkit-appearance: none;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.3s, color 0.3s;
+    min-height: 44px;
+  }
+  input:focus-visible, select:focus-visible, textarea:focus-visible {
+    border-color: var(--accent2);
+    box-shadow: 0 0 0 3px rgba(0,212,255,0.25);
+    outline: none;
+  }
+  input[aria-invalid="true"] { border-color: var(--err); box-shadow: 0 0 0 2px rgba(255,78,106,0.2); }
+  input::placeholder, textarea::placeholder { color: var(--text-dim); }
+
+  textarea {
+    min-height: 160px; resize: vertical; line-height: 1.55;
+    font-size: 0.78rem;
+  }
+
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a9ab8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center;
+    padding-right: 32px; cursor: pointer;
+  }
+  select option { background: var(--select-opt-bg); }
+
+  /* ── MODE TABS ── */
+  .mode-tabs {
+    display: flex; border: 1px solid var(--border);
+    border-radius: 4px; overflow: hidden; margin-bottom: 18px;
+    width: fit-content; transition: border-color 0.3s;
+  }
+  .mode-tab {
+    padding: 7px 18px; font-family: var(--mono); font-size: 0.66rem;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    cursor: pointer; border: none; background: transparent;
+    color: var(--text-dim); transition: all 0.18s; user-select: none;
+    min-height: 44px;
+  }
+  .mode-tab[aria-selected="true"] { background: var(--accent-dim); color: var(--accent); }
+  .mode-tab:hover:not([aria-selected="true"]) { background: var(--panel-tint); color: var(--text-mid); }
+  .mode-tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; z-index: 1; }
+
+  .mode-pane { display: none; }
+  .mode-pane.active { display: block; }
+
+  /* ── UPLOAD ── */
+  .upload-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-top: 10px; flex-wrap: wrap;
+  }
+  .btn-upload {
+    display: flex; align-items: center; gap: 7px;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-dim); font-family: var(--mono); font-size: 0.68rem;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 7px 14px; border-radius: 4px; cursor: pointer;
+    transition: all 0.2s; min-height: 44px;
+  }
+  .btn-upload:hover, .btn-upload:focus-visible { border-color: var(--accent2); color: var(--accent); background: var(--accent-dim); }
+  .btn-upload:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .upload-hint-text {
+    font-family: var(--mono); font-size: 0.62rem;
+    color: var(--text-dim); transition: color 0.3s;
+  }
+
+  /* ── TIMEOUT ── */
+  .timeout-wrap { display: flex; align-items: center; gap: 10px; }
+  .timeout-wrap input[type=range] {
+    flex: 1; padding: 0; border: none; cursor: pointer;
+    min-height: 44px; background: transparent; appearance: none; -webkit-appearance: none;
+  }
+  .timeout-wrap input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: var(--border-hi); border: 1px solid var(--border-hi); transition: background 0.3s; }
+  .timeout-wrap input[type=range]:focus-visible::-webkit-slider-runnable-track { background: var(--accent2); }
+  .timeout-wrap input[type=range]::-moz-range-track { height: 6px; border-radius: 3px; background: var(--border-hi); border: 1px solid var(--border-hi); transition: background 0.3s; }
+  .timeout-wrap input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 2px solid var(--surface); box-shadow: 0 0 0 1.5px var(--accent2); margin-top: -6px; cursor: pointer; transition: background 0.2s, box-shadow 0.2s; }
+  .timeout-wrap input[type=range]:hover::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--accent-dim), 0 0 0 1.5px var(--accent2); }
+  .timeout-wrap input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 2px solid var(--surface); box-shadow: 0 0 0 1.5px var(--accent2); cursor: pointer; }
+  .timeout-wrap input[type=range]::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--accent2); }
+  .timeout-val { font-family: var(--mono); font-size: 0.82rem; color: var(--accent); min-width: 42px; text-align: right; transition: color 0.3s; }
+
+  /* ── SUBMIT ── */
+  .submit-row { margin-top: 22px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .btn-submit {
+    display: flex; align-items: center; gap: 9px;
+    background: var(--accent-dim); border: 1px solid var(--accent2); color: var(--accent);
+    font-family: var(--mono); font-size: 0.78rem; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 10px 26px; border-radius: 4px; cursor: pointer;
+    position: relative; overflow: hidden;
+    transition: background 0.2s, box-shadow 0.2s, border-color 0.3s, color 0.3s;
+    min-height: 44px;
+  }
+  .btn-submit::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(0,212,255,0.1), transparent); transform: translateX(-100%); transition: transform 0.4s; }
+  .btn-submit:hover::before { transform: translateX(100%); }
+  .btn-submit:hover { box-shadow: 0 0 20px rgba(0,144,204,0.2); filter: brightness(1.08); }
+  .btn-submit:active { transform: scale(0.98); }
+  .btn-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-submit:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+  .spinner { display: none; width: 16px; height: 16px; border: 2px solid rgba(0,144,204,0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  .loading .spinner { display: block; }
+  .loading .send-icon { display: none; }
+  .query-hint { font-family: var(--mono); font-size: 0.67rem; color: var(--text-dim); }
+  .query-hint[role="alert"] { color: var(--warn); }
+
+  /* ── RESULTS ── */
+  #results-panel { display: none; }
+  .result-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .badge {
+    font-family: var(--mono); font-size: 0.63rem; font-weight: 600;
+    letter-spacing: 0.12em; text-transform: uppercase; padding: 3px 10px; border-radius: 3px;
+  }
+  .badge-success  { background: var(--ok-dim);   color: var(--ok);   border: 1px solid var(--ok);   }
+  .badge-error    { background: var(--err-dim);  color: var(--err);  border: 1px solid var(--err);  }
+  .badge-warn     { background: var(--warn-dim); color: var(--warn); border: 1px solid var(--warn); }
+  .badge-neutral  { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent2); }
+  .result-query-str { font-family: var(--mono); font-size: 0.72rem; color: var(--text-mid); transition: color 0.3s; }
+  .result-time { margin-left: auto; font-family: var(--mono); font-size: 0.67rem; color: var(--text-dim); transition: color 0.3s; }
+
+  /* ── CERT CARDS ── */
+  .cert-card {
+    border: 1px solid var(--border); border-radius: 5px;
+    margin-bottom: 14px; overflow: hidden; transition: border-color 0.3s;
+  }
+  .cert-card:last-child { margin-bottom: 0; }
+  .cert-card-header {
+    padding: 10px 16px; background: var(--panel-tint);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    transition: background 0.3s, border-color 0.3s;
+  }
+  .cert-index {
+    font-family: var(--mono); font-size: 0.66rem; font-weight: 600;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-mid);
+    transition: color 0.3s;
+  }
+  .cert-subject-cn {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--text);
+    transition: color 0.3s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 280px;
+  }
+  .cert-validity-badge { margin-left: auto; }
+  .cert-card-body { padding: 14px 16px; }
+
+  .cert-field {
+    display: grid; grid-template-columns: 175px 1fr; gap: 8px;
+    padding: 7px 0; border-bottom: 1px solid var(--border);
+    align-items: start; transition: border-color 0.3s;
+  }
+  .cert-field:last-child { border-bottom: none; }
+  [dir="rtl"] .cert-field { grid-template-columns: 1fr 175px; }
+
+  .cert-field-label {
+    font-family: var(--mono); font-size: 0.60rem; font-weight: 500;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-dim); padding-top: 2px; transition: color 0.3s;
+  }
+  .cert-field-value {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--text);
+    word-break: break-all; line-height: 1.55; transition: color 0.3s;
+  }
+  .cert-field-value .tag-list { display: flex; flex-wrap: wrap; gap: 4px; }
+  .cert-tag {
+    font-family: var(--mono); font-size: 0.65rem; padding: 2px 7px;
+    background: var(--accent-dim); color: var(--accent2);
+    border: 1px solid var(--border); border-radius: 3px;
+    transition: background 0.3s, color 0.3s, border-color 0.3s;
+  }
+  .fp-row { font-size: 0.67rem; color: var(--text-mid); line-height: 2; transition: color 0.3s; }
+  .fp-alg { color: var(--text-dim); font-size: 0.60rem; margin-right: 5px; }
+
+  .no-answer {
+    text-align: center; padding: 30px;
+    font-family: var(--mono); font-size: 0.8rem; color: var(--text-dim); transition: color 0.3s;
+  }
+  .raw-block {
+    background: var(--raw-bg); border: 1px solid var(--border); border-radius: 4px;
+    padding: 14px 16px; font-family: var(--mono); font-size: 0.78rem; color: var(--text-mid);
+    white-space: pre-wrap; word-break: break-all; line-height: 1.7;
+    transition: background 0.3s, border-color 0.3s, color 0.3s;
+  }
+
+  /* ── COLLAPSIBLE RAW PEM ── */
+  .pem-details {
+    border: 1px solid var(--border); border-radius: 4px;
+    overflow: hidden; transition: border-color 0.3s;
+    width: 100%;
+  }
+  .pem-summary {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 10px; cursor: pointer;
+    font-family: var(--mono); font-size: 0.63rem;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-dim); background: var(--panel-tint);
+    list-style: none; user-select: none;
+    transition: color 0.2s, background 0.2s;
+    min-height: 32px;
+  }
+  .pem-summary::-webkit-details-marker { display: none; }
+  .pem-summary::marker { display: none; }
+  .pem-summary:hover { color: var(--accent); background: var(--accent-dim); }
+  .pem-arrow {
+    font-size: 0.55rem; flex-shrink: 0;
+    transition: transform 0.2s; color: var(--text-dim);
+  }
+  details[open] > .pem-summary .pem-arrow { transform: rotate(90deg); }
+  .pem-copy-btn {
+    margin-left: auto; flex-shrink: 0;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-dim); font-family: var(--mono);
+    font-size: 0.58rem; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 2px 9px; border-radius: 3px; cursor: pointer;
+    transition: all 0.18s; line-height: 1.8;
+  }
+  .pem-copy-btn:hover { border-color: var(--accent2); color: var(--accent); background: var(--accent-dim); }
+  .pem-copy-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .pem-copy-btn.pem-copied { color: var(--ok); border-color: var(--ok); background: var(--ok-dim); }
+  .pem-content {
+    margin: 0; padding: 12px 14px;
+    font-family: var(--mono); font-size: 0.72rem; color: var(--text-mid);
+    white-space: pre; overflow-x: auto; line-height: 1.65;
+    background: var(--raw-bg); border-top: 1px solid var(--border);
+    transition: background 0.3s, color 0.3s, border-color 0.3s;
+  }
+
+  /* ── REDUCE MOTION ── */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+
+  /* ── HIGH CONTRAST ── */
+  @media (forced-colors: active) {
+    .cert-card { forced-color-adjust: none; border: 1px solid ButtonText; }
+    .btn-submit { forced-color-adjust: none; border: 2px solid ButtonText; }
+    .badge-success, .badge-error, .badge-warn, .badge-neutral { forced-color-adjust: none; }
+  }
+
+  footer {
+    margin-top: 48px; font-family: var(--mono); font-size: 0.6rem;
+    color: var(--text-dim); letter-spacing: 0.08em; text-align: center; opacity: 0.45;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 580px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .form-group.full { grid-column: 1; }
+    .theme-label { display: none; }
+    .cert-field { grid-template-columns: 1fr; gap: 2px; }
+    .cert-field-label { padding-bottom: 2px; }
+    .cert-subject-cn { max-width: 150px; }
+  }
+</style>
+</head>
+<body>
+
+<a class="skip-link" href="#main-content" id="skip-link">Skip to main content</a>
+
+<header role="banner">
+  <!-- Shield + certificate icon -->
+  <svg class="logo-shield" viewBox="0 0 40 44" fill="none" xmlns="http://www.w3.org/2000/svg"
+       aria-hidden="true" focusable="false">
+    <path d="M20 2L4 9v14c0 9 7 17.4 16 20 9-2.6 16-11 16-20V9L20 2z"/>
+    <!-- cert doc -->
+    <rect x="13" y="14" width="14" height="16" rx="1.5"/>
+    <line x1="16" y1="19" x2="24" y2="19"/>
+    <line x1="16" y1="22" x2="24" y2="22"/>
+    <line x1="16" y1="25" x2="21" y2="25"/>
+    <!-- seal dot -->
+    <circle class="seal" cx="24" cy="26" r="2.5"/>
+  </svg>
+  <div class="header-text">
+    <h1 id="hdr-title">Certificate Inspector</h1>
+    <p id="hdr-subtitle" aria-live="polite"></p>
+  </div>
+  <div class="header-right">
+    <div class="lang-select-wrap">
+      <label for="lang-select" class="visually-hidden" id="lang-select-label">Language</label>
+      <select class="lang-select" id="lang-select" aria-labelledby="lang-select-label" title="Language / Langue">
+        <option value="ar">AR</option>
+        <option value="bn">BN</option>
+        <option value="de">DE</option>
+        <option value="en">EN</option>
+        <option value="es">ES</option>
+        <option value="fr">FR</option>
+        <option value="hi">HI</option>
+        <option value="id">ID</option>
+        <option value="ja">JA</option>
+        <option value="ko">KO</option>
+        <option value="pt-BR">PT</option>
+        <option value="ru">RU</option>
+        <option value="ur">UR</option>
+        <option value="vi">VI</option>
+        <option value="zh-CN">ZH</option>
+      </select>
+      <span class="lang-arrow" aria-hidden="true">▾</span>
+    </div>
+    <button class="theme-toggle" id="theme-toggle"
+            role="switch" aria-checked="false" aria-label="Toggle color theme">
+      <span class="theme-icon" id="theme-icon" aria-hidden="true">☀️</span>
+      <div class="theme-track" aria-hidden="true"><div class="theme-thumb"></div></div>
+      <span class="theme-label" id="theme-label"></span>
+    </button>
+  </div>
+</header>
+
+<main id="main-content" role="main">
+
+  <div id="sr-status" aria-live="polite" aria-atomic="true"
+       style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;"></div>
+
+  <section class="panel" aria-labelledby="ph-params">
+    <div class="panel-head" id="ph-params" role="heading" aria-level="2"></div>
+    <div class="panel-body">
+      <form id="cert-form" novalidate aria-label="Certificate inspection form">
+
+        <!-- Mode selector tabs -->
+        <div class="mode-tabs" role="tablist" aria-label="Inspection mode" id="mode-tablist">
+          <button class="mode-tab" role="tab"
+                  id="tab-socket" data-tab="socket"
+                  aria-selected="true" aria-controls="pane-socket"
+                  tabindex="0" id="tab-socket"></button>
+          <button class="mode-tab" role="tab"
+                  id="tab-raw" data-tab="raw"
+                  aria-selected="false" aria-controls="pane-raw"
+                  tabindex="-1" id="tab-raw"></button>
+        </div>
+
+        <!-- ── SOCKET PANE ── -->
+        <div class="mode-pane active" id="pane-socket"
+             role="tabpanel" aria-labelledby="tab-socket" tabindex="0">
+          <div class="form-grid">
+
+            <div class="form-group full">
+              <label for="socket-input" id="lbl-socket"></label>
+              <input type="text" id="socket-input" name="socket"
+                     autocomplete="off" spellcheck="false"
+                     aria-labelledby="lbl-socket"
+                     aria-describedby="socket-hint"
+                     aria-required="true"
+                     aria-invalid="false">
+              <span id="socket-hint" style="display:none"></span>
+            </div>
+
+            <div class="form-group">
+              <label for="sni-input" id="lbl-sni"></label>
+              <input type="text" id="sni-input" name="sni"
+                     autocomplete="off" spellcheck="false"
+                     aria-labelledby="lbl-sni">
+            </div>
+
+            <div class="form-group">
+              <label for="timeout-slider" id="lbl-timeout"></label>
+              <div class="timeout-wrap">
+                <input type="range" id="timeout-slider" name="timeout"
+                       min="1" max="120" value="10" step="1"
+                       aria-labelledby="lbl-timeout"
+                       aria-valuemin="1" aria-valuemax="120" aria-valuenow="10"
+                       aria-valuetext="10 seconds">
+                <span class="timeout-val" id="timeout-val" aria-hidden="true">10 s</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ── RAW PANE ── -->
+        <div class="mode-pane" id="pane-raw"
+             role="tabpanel" aria-labelledby="tab-raw" tabindex="0" hidden>
+          <div class="form-grid">
+
+            <div class="form-group full">
+              <label for="raw-cert" id="lbl-rawcert"></label>
+              <textarea id="raw-cert" name="raw_cert_data"
+                        spellcheck="false" autocomplete="off"
+                        aria-labelledby="lbl-rawcert"
+                        aria-describedby="raw-hint"></textarea>
+              <div class="upload-row">
+                <button type="button" class="btn-upload" id="btn-upload"
+                        aria-describedby="upload-hint">
+                  <!-- Upload icon -->
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                       stroke-linejoin="round" aria-hidden="true" focusable="false">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                  <span id="btn-upload-label"></span>
+                </button>
+                <input type="file" id="cert-file-input" accept=".pem,.crt,.cer,.der"
+                       aria-label="Certificate file" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
+                <span class="upload-hint-text" id="upload-hint"></span>
+              </div>
+              <span id="raw-hint" style="display:none"></span>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="submit-row">
+          <button class="btn-submit" id="btn-query" type="submit"
+                  aria-describedby="query-hint">
+            <svg class="send-icon" width="15" height="15" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true" focusable="false">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="16.5" y1="16.5" x2="22" y2="22"/>
+            </svg>
+            <div class="spinner" aria-hidden="true"></div>
+            <span id="btn-send-label"></span>
+          </button>
+          <span class="query-hint" id="query-hint" aria-live="assertive" role="status"></span>
+        </div>
+
+      </form>
+    </div>
+  </section>
+
+  <!-- Results -->
+  <section class="panel" id="results-panel"
+           aria-labelledby="ph-results" aria-live="polite">
+    <div class="panel-head" id="ph-results" role="heading" aria-level="2"></div>
+    <div class="panel-body" id="results-body"></div>
+  </section>
+
+</main>
+
+<footer role="contentinfo" id="footer-text">CERTIFICATE INSPECTOR · CERT · v1.0</footer>
+
+<style>
+.visually-hidden {
+  position: absolute !important; width: 1px !important; height: 1px !important;
+  padding: 0 !important; margin: -1px !important; overflow: hidden !important;
+  clip: rect(0,0,0,0) !important; white-space: nowrap !important; border: 0 !important;
+}
+</style>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// I18N
+// ══════════════════════════════════════════════════════════════════
+const LANGS = {
+  ar: {
+    dir:'rtl',
+    title:          'مفتش الشهادات',
+    subtitle:       'أمن المعلومات · تفتيش شهادات X.509',
+    themeLight:     'فاتح', themeDark: 'داكن',
+    panelParams:    'معاملات الفحص',
+    tabSocket:      'مقبس', tabRaw: 'شهادة خام',
+    labelSocket:    'المقبس (مضيف:منفذ)',
+    placeholderSocket: 'مثال: example.com:443 أو 1.2.3.4:443',
+    labelSni:       'SNI (اختياري)',
+    placeholderSni: 'مثال: example.com',
+    labelTimeout:   'المهلة',
+    labelRawCert:   'بيانات الشهادة (PEM / DER)',
+    placeholderRaw: '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+    btnUpload:      'رفع ملف',
+    uploadHint:     'يقبل .pem .crt .cer .der · أو الصق المحتوى أعلاه',
+    btnSend:        'فحص',
+    panelResults:   'النتائج',
+    warnNoSocket:   '⚠ أدخل عنوان المقبس (مضيف:منفذ)',
+    warnNoRaw:      '⚠ الصق أو ارفع شهادة',
+    certCount:      n => `${n} شهادة`,
+    certOf:         (i,n) => `الشهادة ${i} من ${n}`,
+    labelLeaf:      'طرفية', labelIntermediate: 'وسيطة', labelRoot: 'جذر',
+    labelSubject:   'الموضوع', labelIssuer: 'المُصدِر',
+    labelValidity:  'الصلاحية', labelSerial: 'الرقم التسلسلي',
+    labelAlgo:      'خوارزمية التوقيع', labelPubKey: 'المفتاح العام',
+    labelSAN:       'الأسماء البديلة', labelKeyUsage: 'استخدام المفتاح',
+    labelExtKeyUsage:'استخدام مفتاح موسّع', labelFingerprints: 'البصمات',
+    labelFlags:     'خصائص',
+    labelRawPem:    'PEM الخام', copyBtn: 'نسخ', copiedBtn: 'تم النسخ!',
+    valid:          'صالح', expired: 'منتهي الصلاحية',
+    daysLeft:       n => `${n} يوم متبقٍ`,
+    daysExpired:    n => `انتهت منذ ${n} يوم`,
+    selfSigned:     'موقَّع ذاتياً', isCA: 'سلطة إصدار',
+    critical:       'حرج',
+    noCerts:        'لم تُعثر على أي شهادة.',
+    errBadge:       'خطأ',
+    loadingLabel:   'جارٍ الفحص…',
+    resultsReady:   n => `اكتمل الفحص، ${n} شهادة.`,
+    skipLink:       'انتقل إلى المحتوى الرئيسي',
+  },
+  bn: {
+    dir:'ltr',
+    title:          'সার্টিফিকেট পরিদর্শক',
+    subtitle:       'সাইবার নিরাপত্তা · X.509 সার্টিফিকেট বিশ্লেষণ',
+    themeLight:     'হালকা', themeDark: 'গাঢ়',
+    panelParams:    'পরিদর্শন প্যারামিটার',
+    tabSocket:      'সকেট', tabRaw: 'কাঁচা সার্টিফিকেট',
+    labelSocket:    'সকেট (হোস্ট:পোর্ট)',
+    placeholderSocket: 'যেমন: example.com:443',
+    labelSni:       'SNI (ঐচ্ছিক)',
+    placeholderSni: 'যেমন: example.com',
+    labelTimeout:   'টাইমআউট',
+    labelRawCert:   'সার্টিফিকেট ডেটা (PEM / DER)',
+    placeholderRaw: '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+    btnUpload:      'ফাইল আপলোড',
+    uploadHint:     '.pem .crt .cer .der ফাইল গৃহীত · বা উপরে পেস্ট করুন',
+    btnSend:        'পরিদর্শন করুন',
+    panelResults:   'ফলাফল',
+    warnNoSocket:   '⚠ সকেট ঠিকানা লিখুন (হোস্ট:পোর্ট)',
+    warnNoRaw:      '⚠ সার্টিফিকেট পেস্ট বা আপলোড করুন',
+    certCount:      n => `${n}টি সার্টিফিকেট`,
+    certOf:         (i,n) => `${n}-এর মধ্যে ${i}নং সার্টিফিকেট`,
+    labelLeaf:      'লিফ', labelIntermediate: 'ইন্টারমিডিয়েট', labelRoot: 'রুট',
+    labelSubject:   'বিষয়', labelIssuer: 'ইস্যুকারী',
+    labelValidity:  'বৈধতা', labelSerial: 'সিরিয়াল নম্বর',
+    labelAlgo:      'স্বাক্ষর অ্যালগরিদম', labelPubKey: 'পাবলিক কী',
+    labelSAN:       'বিকল্প নাম', labelKeyUsage: 'কী ব্যবহার',
+    labelExtKeyUsage:'বর্ধিত কী ব্যবহার', labelFingerprints: 'ফিঙ্গারপ্রিন্ট',
+    labelFlags:     'বৈশিষ্ট্য',
+    labelRawPem:    'Raw PEM', copyBtn: 'কপি', copiedBtn: 'কপি হয়েছে!',
+    valid:          'বৈধ', expired: 'মেয়াদোত্তীর্ণ',
+    daysLeft:       n => `${n} দিন বাকি`,
+    daysExpired:    n => `${n} দিন আগে মেয়াদ উত্তীর্ণ`,
+    selfSigned:     'স্ব-স্বাক্ষরিত', isCA: 'CA',
+    critical:       'সংকটপূর্ণ',
+    noCerts:        'কোনো সার্টিফিকেট পাওয়া যায়নি।',
+    errBadge:       'ত্রুটি',
+    loadingLabel:   'পরিদর্শন চলছে…',
+    resultsReady:   n => `পরিদর্শন সম্পন্ন, ${n}টি সার্টিফিকেট।`,
+    skipLink:       'মূল বিষয়বস্তুতে যান',
+  },
+  de: {
+    dir:'ltr',
+    title:          'Zertifikat-Inspektor',
+    subtitle:       'Cybersicherheit · X.509-Zertifikatanalyse',
+    themeLight:     'Hell', themeDark: 'Dunkel',
+    panelParams:    'Inspektionsparameter',
+    tabSocket:      'Socket', tabRaw: 'Rohes Zertifikat',
+    labelSocket:    'Socket (Host:Port)',
+    placeholderSocket: 'z. B.: example.com:443 oder [::1]:443',
+    labelSni:       'SNI (optional)',
+    placeholderSni: 'z. B.: example.com',
+    labelTimeout:   'Timeout',
+    labelRawCert:   'Zertifikatdaten (PEM / DER)',
+    placeholderRaw: '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+    btnUpload:      'Datei hochladen',
+    uploadHint:     '.pem .crt .cer .der · oder Inhalt oben einfügen',
+    btnSend:        'Inspizieren',
+    panelResults:   'Ergebnisse',
+    warnNoSocket:   '⚠ Socket-Adresse eingeben (Host:Port)',
+    warnNoRaw:      '⚠ Zertifikat einfügen oder hochladen',
+    certCount:      n => `${n} Zertifikat(e)`,
+    certOf:         (i,n) => `Zertifikat ${i} von ${n}`,
+    labelLeaf:      'Blatt', labelIntermediate: 'Zwischenzertifikat', labelRoot: 'Wurzel',
+    labelSubject:   'Inhaber', labelIssuer: 'Aussteller',
+    labelValidity:  'Gültigkeit', labelSerial: 'Seriennummer',
+    labelAlgo:      'Signaturalgorithmus', labelPubKey: 'Öffentlicher Schlüssel',
+    labelSAN:       'Alternative Namen', labelKeyUsage: 'Schlüsselverwendung',
+    labelExtKeyUsage:'Erweiterte Schlüsselverwendung', labelFingerprints: 'Fingerabdrücke',
+    labelFlags:     'Eigenschaften',
+    labelRawPem:    'Raw PEM', copyBtn: 'Kopieren', copiedBtn: 'Kopiert!',
+    valid:          'Gültig', expired: 'Abgelaufen',
+    daysLeft:       n => `noch ${n} Tag(e)`,
+    daysExpired:    n => `vor ${n} Tag(en) abgelaufen`,
+    selfSigned:     'Selbstsigniert', isCA: 'CA',
+    critical:       'kritisch',
+    noCerts:        'Keine Zertifikate gefunden.',
+    errBadge:       'FEHLER',
+    loadingLabel:   'Inspektion läuft…',
+    resultsReady:   n => `Inspektion abgeschlossen, ${n} Zertifikat(e).`,
+    skipLink:       'Zum Hauptinhalt springen',
+  },
+  en: {
+    dir:'ltr',
+    title:          'Certificate Inspector',
+    subtitle:       'Cyber Threat Intelligence · X.509 Certificate Analysis',
+    themeLight:     'Light', themeDark: 'Dark',
+    panelParams:    'Inspection Parameters',
+    tabSocket:      'Socket', tabRaw: 'Raw Certificate',
+    labelSocket:    'Socket (host:port)',
+    placeholderSocket: 'e.g.: example.com:443 or [::1]:443',
+    labelSni:       'SNI (optional)',
+    placeholderSni: 'e.g.: example.com',
+    labelTimeout:   'Timeout',
+    labelRawCert:   'Certificate data (PEM / DER)',
+    placeholderRaw: '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+    btnUpload:      'Upload file',
+    uploadHint:     'Accepts .pem .crt .cer .der · or paste content above',
+    btnSend:        'Inspect',
+    panelResults:   'Results',
+    warnNoSocket:   '⚠ Enter a socket address (host:port)',
+    warnNoRaw:      '⚠ Paste or upload a certificate',
+    certCount:      n => `${n} certificate(s)`,
+    certOf:         (i,n) => `Certificate ${i} of ${n}`,
+    labelLeaf:      'Leaf', labelIntermediate: 'Intermediate', labelRoot: 'Root',
+    labelSubject:   'Subject', labelIssuer: 'Issuer',
+    labelValidity:  'Validity', labelSerial: 'Serial Number',
+    labelAlgo:      'Signature Algorithm', labelPubKey: 'Public Key',
+    labelSAN:       'Subject Alt. Names', labelKeyUsage: 'Key Usage',
+    labelExtKeyUsage:'Extended Key Usage', labelFingerprints: 'Fingerprints',
+    labelFlags:     'Flags',
+    labelRawPem:    'Raw PEM', copyBtn: 'Copy', copiedBtn: 'Copied!',
+    valid:          'Valid', expired: 'Expired',
+    daysLeft:       n => `${n} day(s) left`,
+    daysExpired:    n => `expired ${n} day(s) ago`,
+    selfSigned:     'Self-signed', isCA: 'CA',
+    critical:       'critical',
+    noCerts:        'No certificates returned.',
+    errBadge:       'ERROR',
+    loadingLabel:   'Inspecting certificate…',
+    resultsReady:   n => `Inspection complete, ${n} certificate(s).`,
+    skipLink:       'Skip to main content',
+  },
+  es: {
+    dir:'ltr',
+    title:          'Inspector de Certificados',
+    subtitle:       'Ciberseguridad · Análisis de Certificados X.509',
+    themeLight:     'Claro', themeDark: 'Oscuro',
+    panelParams:    'Parámetros de Inspección',
+    tabSocket:      'Socket', tabRaw: 'Certificado Raw',
+    labelSocket:    'Socket (host:puerto)',
+    placeholderSocket: 'ej.: example.com:443 o [::1]:443',
+    labelSni:       'SNI (opcional)',
+    placeholderSni: 'ej.: example.com',
+    labelTimeout:   'Tiempo límite',
+    labelRawCert:   'Datos del certificado (PEM / DER)',
+    placeholderRaw: '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+    btnUpload:      'Subir archivo',
+    uploadHint:     'Acepta .pem .crt .cer .der · o pega el contenido arriba',
+    btnSend:        'Inspeccionar',
+    panelResults:   'Resultados',
+    warnNoSocket:   '⚠ Introduce una dirección socket (host:puerto)',
+    warnNoRaw:      '⚠ Pega o sube un certificado',
+    certCount:      n => `${n} certificado(s)`,
+    certOf:         (i,n) => `Certificado ${i} de ${n}`,
+    labelLeaf:      'Hoja', labelIntermediate: 'Intermedio', labelRoot: 'Raíz',
+    labelSubject:   'Sujeto', labelIssuer: 'Emisor',
+    labelValidity:  'Validez', labelSerial: 'Número de serie',
+    labelAlgo:      'Algoritmo de firma', labelPubKey: 'Clave pública',
+    labelSAN:       'Nombres alternativos', labelKeyUsage: 'Uso de clave',
+    labelExtKeyUsage:'Uso extendido de clave', labelFingerprints: 'Huellas digitales',
+    labelFlags:     'Atributos',
+    labelRawPem:    'PEM bruto', copyBtn: 'Copiar', copiedBtn: '¡Copiado!',
+    valid:          'Válido', expired: 'Expirado',
+    daysLeft:       n => `${n} día(s) restante(s)`,
+    daysExpired:    n => `expirado hace ${n} día(s)`,
+    selfSigned:     'Autofirmado', isCA: 'CA',
+    critical:       'crítico',
+    noCerts:        'No se encontraron certificados.',
+    errBadge:       'ERROR',
+    loadingLabel:   'Inspeccionando certificado…',
+    resultsReady:   n => `Inspección completa, ${n} certificado(s).`,
+    skipLink:       'Saltar al contenido principal',
+  },
+  fr: {
+    dir:'ltr',
+    title:          'Inspecteur de Certificats',
+    subtitle:       'Cyber Threat Intelligence · Analyse de Certificats X.509',
+    themeLight:     'Clair', themeDark: 'Sombre',
+    panelParams:    "Paramètres d'inspection",
+    tabSocket:      'Socket', tabRaw: 'Certificat brut',
+    labelSocket:    'Socket (hôte:port)',
+    placeholderSocket: 'ex: example.com:443 ou [::1]:443',
+    labelSni:       'SNI (optionnel)',
+    placeholderSni: 'ex: example.com',
+    labelTimeout:   'Timeout',
+    labelRawCert:   'Données du certificat (PEM / DER)',
+    placeholderRaw: '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+    btnUpload:      'Importer un fichier',
+    uploadHint:     'Accepte .pem .crt .cer .der · ou coller le contenu ci-dessus',
+    btnSend:        'Inspecter',
+    panelResults:   'Résultats',
+    warnNoSocket:   '⚠ Entrez une adresse socket (hôte:port)',
+    warnNoRaw:      '⚠ Collez ou importez un certificat',
+    certCount:      n => `${n} certificat(s)`,
+    certOf:         (i,n) => `Certificat ${i} sur ${n}`,
+    labelLeaf:      'Feuille', labelIntermediate: 'Intermédiaire', labelRoot: 'Racine',
+    labelSubject:   'Sujet', labelIssuer: 'Émetteur',
+    labelValidity:  'Validité', labelSerial: 'Numéro de série',
+    labelAlgo:      'Algorithme de signature', labelPubKey: 'Clé publique',
+    labelSAN:       'Noms alternatifs', labelKeyUsage: 'Usage de la clé',
+    labelExtKeyUsage:"Usage étendu de la clé", labelFingerprints: 'Empreintes',
+    labelFlags:     'Attributs',
+    labelRawPem:    'PEM brut', copyBtn: 'Copier', copiedBtn: 'Copié !',
+    valid:          'Valide', expired: 'Expiré',
+    daysLeft:       n => `${n} jour(s) restant(s)`,
+    daysExpired:    n => `expiré il y a ${n} jour(s)`,
+    selfSigned:     'Auto-signé', isCA: 'CA',
+    critical:       'critique',
+    noCerts:        'Aucun certificat retourné.',
+    errBadge:       'ERREUR',
+    loadingLabel:   'Inspection en cours…',
+    resultsReady:   n => `Inspection terminée, ${n} certificat(s).`,
+    skipLink:       'Aller au contenu principal',
+  },
+  hi: {
+    dir:'ltr',
+    title:          'प्रमाणपत्र निरीक्षक',
+    subtitle:       'साइबर सुरक्षा · X.509 प्रमाणपत्र विश्लेषण',
+    themeLight:     'हल्का', themeDark: 'गहरा',
+    panelParams:    'निरीक्षण पैरामीटर',
+    tabSocket:      'सॉकेट', tabRaw: 'कच्चा प्रमाणपत्र',
+    labelSocket:    'सॉकेट (होस्ट:पोर्ट)',
+    placeholderSocket: 'उदा: example.com:443',
+    labelSni:       'SNI (वैकल्पिक)',
+    placeholderSni: 'उदा: example.com',
+    labelTimeout:   'टाइमआउट',
+    labelRawCert:   'प्रमाणपत्र डेटा (PEM / DER)',
+    placeholderRaw: '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+    btnUpload:      'फ़ाइल अपलोड करें',
+    uploadHint:     '.pem .crt .cer .der स्वीकृत · या ऊपर सामग्री चिपकाएं',
+    btnSend:        'निरीक्षण करें',
+    panelResults:   'परिणाम',
+    warnNoSocket:   '⚠ सॉकेट पता दर्ज करें (होस्ट:पोर्ट)',
+    warnNoRaw:      '⚠ प्रमाणपत्र चिपकाएं या अपलोड करें',
+    certCount:      n => `${n} प्रमाणपत्र`,
+    certOf:         (i,n) => `${n} में से ${i}वाँ प्रमाणपत्र`,
+    labelLeaf:      'पत्ती', labelIntermediate: 'मध्यवर्ती', labelRoot: 'मूल',
+    labelSubject:   'विषय', labelIssuer: 'जारीकर्ता',
+    labelValidity:  'वैधता', labelSerial: 'क्रम संख्या',
+    labelAlgo:      'हस्ताक्षर एल्गोरिदम', labelPubKey: 'सार्वजनिक कुंजी',
+    labelSAN:       'वैकल्पिक नाम', labelKeyUsage: 'कुंजी उपयोग',
+    labelExtKeyUsage:'विस्तारित कुंजी उपयोग', labelFingerprints: 'फिंगरप्रिंट',
+    labelFlags:     'विशेषताएं',
+    labelRawPem:    'Raw PEM', copyBtn: 'कॉपी', copiedBtn: 'कॉपी हो गया!',
+    valid:          'वैध', expired: 'समाप्त',
+    daysLeft:       n => `${n} दिन शेष`,
+    daysExpired:    n => `${n} दिन पहले समाप्त`,
+    selfSigned:     'स्व-हस्ताक्षरित', isCA: 'CA',
+    critical:       'महत्वपूर्ण',
+    noCerts:        'कोई प्रमाणपत्र नहीं मिला।',
+    errBadge:       'त्रुटि',
+    loadingLabel:   'निरीक्षण चल रहा है…',
+    resultsReady:   n => `निरीक्षण पूर्ण, ${n} प्रमाणपत्र।`,
+    skipLink:       'मुख्य सामग्री पर जाएं',
+  },
+  id: {
+    dir:'ltr',
+    title:          'Inspektur Sertifikat',
+    subtitle:       'Keamanan Siber · Analisis Sertifikat X.509',
+    themeLight:     'Terang', themeDark: 'Gelap',
+    panelParams:    'Parameter Inspeksi',
+    tabSocket:      'Socket', tabRaw: 'Sertifikat Mentah',
+    labelSocket:    'Socket (host:port)',
+    placeholderSocket: 'mis.: example.com:443 atau [::1]:443',
+    labelSni:       'SNI (opsional)',
+    placeholderSni: 'mis.: example.com',
+    labelTimeout:   'Batas waktu',
+    labelRawCert:   'Data sertifikat (PEM / DER)',
+    placeholderRaw: '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+    btnUpload:      'Unggah file',
+    uploadHint:     'Menerima .pem .crt .cer .der · atau tempel konten di atas',
+    btnSend:        'Inspeksi',
+    panelResults:   'Hasil',
+    warnNoSocket:   '⚠ Masukkan alamat socket (host:port)',
+    warnNoRaw:      '⚠ Tempel atau unggah sertifikat',
+    certCount:      n => `${n} sertifikat`,
+    certOf:         (i,n) => `Sertifikat ${i} dari ${n}`,
+    labelLeaf:      'Daun', labelIntermediate: 'Menengah', labelRoot: 'Akar',
+    labelSubject:   'Subjek', labelIssuer: 'Penerbit',
+    labelValidity:  'Validitas', labelSerial: 'Nomor seri',
+    labelAlgo:      'Algoritma tanda tangan', labelPubKey: 'Kunci publik',
+    labelSAN:       'Nama alternatif', labelKeyUsage: 'Penggunaan kunci',
+    labelExtKeyUsage:'Penggunaan kunci diperluas', labelFingerprints: 'Sidik jari',
+    labelFlags:     'Atribut',
+    labelRawPem:    'Raw PEM', copyBtn: 'Salin', copiedBtn: 'Disalin!',
+    valid:          'Valid', expired: 'Kedaluwarsa',
+    daysLeft:       n => `${n} hari tersisa`,
+    daysExpired:    n => `kedaluwarsa ${n} hari lalu`,
+    selfSigned:     'Ditandatangani sendiri', isCA: 'CA',
+    critical:       'kritis',
+    noCerts:        'Tidak ada sertifikat ditemukan.',
+    errBadge:       'KESALAHAN',
+    loadingLabel:   'Menginspeksi sertifikat…',
+    resultsReady:   n => `Inspeksi selesai, ${n} sertifikat.`,
+    skipLink:       'Lewati ke konten utama',
+  },
+  ja: {
+    dir:'ltr',
+    title:          '証明書インスペクター',
+    subtitle:       'サイバーセキュリティ · X.509証明書分析',
+    themeLight:     'ライト', themeDark: 'ダーク',
+    panelParams:    '検査パラメータ',
+    tabSocket:      'ソケット', tabRaw: '生証明書',
+    labelSocket:    'ソケット（ホスト:ポート）',
+    placeholderSocket: '例: example.com:443 または [::1]:443',
+    labelSni:       'SNI（省略可）',
+    placeholderSni: '例: example.com',
+    labelTimeout:   'タイムアウト',
+    labelRawCert:   '証明書データ（PEM / DER）',
+    placeholderRaw: '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+    btnUpload:      'ファイルをアップロード',
+    uploadHint:     '.pem .crt .cer .der 対応 · または上に貼り付け',
+    btnSend:        '検査',
+    panelResults:   '結果',
+    warnNoSocket:   '⚠ ソケットアドレスを入力してください（ホスト:ポート）',
+    warnNoRaw:      '⚠ 証明書を貼り付けまたはアップロードしてください',
+    certCount:      n => `${n} 件の証明書`,
+    certOf:         (i,n) => `${n} 件中 ${i} 番目の証明書`,
+    labelLeaf:      'リーフ', labelIntermediate: '中間', labelRoot: 'ルート',
+    labelSubject:   'サブジェクト', labelIssuer: '発行者',
+    labelValidity:  '有効期間', labelSerial: 'シリアル番号',
+    labelAlgo:      '署名アルゴリズム', labelPubKey: '公開鍵',
+    labelSAN:       '代替名', labelKeyUsage: '鍵使用法',
+    labelExtKeyUsage:'拡張鍵使用法', labelFingerprints: 'フィンガープリント',
+    labelFlags:     '属性',
+    labelRawPem:    'Raw PEM', copyBtn: 'コピー', copiedBtn: 'コピー済み!',
+    valid:          '有効', expired: '期限切れ',
+    daysLeft:       n => `残り ${n} 日`,
+    daysExpired:    n => `${n} 日前に期限切れ`,
+    selfSigned:     '自己署名', isCA: 'CA',
+    critical:       'クリティカル',
+    noCerts:        '証明書が見つかりませんでした。',
+    errBadge:       'エラー',
+    loadingLabel:   '証明書を検査中…',
+    resultsReady:   n => `検査完了、${n} 件の証明書。`,
+    skipLink:       'メインコンテンツへスキップ',
+  },
+  ko: {
+    dir:'ltr',
+    title:          '인증서 검사기',
+    subtitle:       '사이버 보안 · X.509 인증서 분석',
+    themeLight:     '라이트', themeDark: '다크',
+    panelParams:    '검사 매개변수',
+    tabSocket:      '소켓', tabRaw: '원시 인증서',
+    labelSocket:    '소켓 (호스트:포트)',
+    placeholderSocket: '예: example.com:443 또는 [::1]:443',
+    labelSni:       'SNI (선택)',
+    placeholderSni: '예: example.com',
+    labelTimeout:   '타임아웃',
+    labelRawCert:   '인증서 데이터 (PEM / DER)',
+    placeholderRaw: '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+    btnUpload:      '파일 업로드',
+    uploadHint:     '.pem .crt .cer .der 지원 · 또는 위에 붙여넣기',
+    btnSend:        '검사',
+    panelResults:   '결과',
+    warnNoSocket:   '⚠ 소켓 주소를 입력하세요 (호스트:포트)',
+    warnNoRaw:      '⚠ 인증서를 붙여넣거나 업로드하세요',
+    certCount:      n => `${n}개 인증서`,
+    certOf:         (i,n) => `${n}개 중 ${i}번 인증서`,
+    labelLeaf:      '리프', labelIntermediate: '중간', labelRoot: '루트',
+    labelSubject:   '주체', labelIssuer: '발급자',
+    labelValidity:  '유효 기간', labelSerial: '일련 번호',
+    labelAlgo:      '서명 알고리즘', labelPubKey: '공개 키',
+    labelSAN:       '대체 이름', labelKeyUsage: '키 사용',
+    labelExtKeyUsage:'확장 키 사용', labelFingerprints: '지문',
+    labelFlags:     '속성',
+    labelRawPem:    'Raw PEM', copyBtn: '복사', copiedBtn: '복사됨!',
+    valid:          '유효', expired: '만료됨',
+    daysLeft:       n => `${n}일 남음`,
+    daysExpired:    n => `${n}일 전 만료`,
+    selfSigned:     '자체 서명', isCA: 'CA',
+    critical:       '중요',
+    noCerts:        '인증서를 찾을 수 없습니다.',
+    errBadge:       '오류',
+    loadingLabel:   '인증서 검사 중…',
+    resultsReady:   n => `검사 완료, ${n}개 인증서.`,
+    skipLink:       '본문으로 건너뛰기',
+  },
+  'pt-BR': {
+    dir:'ltr',
+    title:          'Inspetor de Certificados',
+    subtitle:       'Cibersegurança · Análise de Certificados X.509',
+    themeLight:     'Claro', themeDark: 'Escuro',
+    panelParams:    'Parâmetros de Inspeção',
+    tabSocket:      'Socket', tabRaw: 'Certificado Bruto',
+    labelSocket:    'Socket (host:porta)',
+    placeholderSocket: 'ex.: example.com:443 ou [::1]:443',
+    labelSni:       'SNI (opcional)',
+    placeholderSni: 'ex.: example.com',
+    labelTimeout:   'Tempo limite',
+    labelRawCert:   'Dados do certificado (PEM / DER)',
+    placeholderRaw: '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+    btnUpload:      'Enviar arquivo',
+    uploadHint:     'Aceita .pem .crt .cer .der · ou cole o conteúdo acima',
+    btnSend:        'Inspecionar',
+    panelResults:   'Resultados',
+    warnNoSocket:   '⚠ Informe um endereço socket (host:porta)',
+    warnNoRaw:      '⚠ Cole ou envie um certificado',
+    certCount:      n => `${n} certificado(s)`,
+    certOf:         (i,n) => `Certificado ${i} de ${n}`,
+    labelLeaf:      'Folha', labelIntermediate: 'Intermediário', labelRoot: 'Raiz',
+    labelSubject:   'Sujeito', labelIssuer: 'Emissor',
+    labelValidity:  'Validade', labelSerial: 'Número de série',
+    labelAlgo:      'Algoritmo de assinatura', labelPubKey: 'Chave pública',
+    labelSAN:       'Nomes alternativos', labelKeyUsage: 'Uso da chave',
+    labelExtKeyUsage:'Uso estendido da chave', labelFingerprints: 'Impressões digitais',
+    labelFlags:     'Atributos',
+    labelRawPem:    'PEM bruto', copyBtn: 'Copiar', copiedBtn: 'Copiado!',
+    valid:          'Válido', expired: 'Expirado',
+    daysLeft:       n => `${n} dia(s) restante(s)`,
+    daysExpired:    n => `expirado há ${n} dia(s)`,
+    selfSigned:     'Autoassinado', isCA: 'CA',
+    critical:       'crítico',
+    noCerts:        'Nenhum certificado retornado.',
+    errBadge:       'ERRO',
+    loadingLabel:   'Inspecionando certificado…',
+    resultsReady:   n => `Inspeção concluída, ${n} certificado(s).`,
+    skipLink:       'Pular para o conteúdo principal',
+  },
+  ru: {
+    dir:'ltr',
+    title:          'Инспектор сертификатов',
+    subtitle:       'Кибербезопасность · Анализ сертификатов X.509',
+    themeLight:     'Светлая', themeDark: 'Тёмная',
+    panelParams:    'Параметры проверки',
+    tabSocket:      'Сокет', tabRaw: 'Сырой сертификат',
+    labelSocket:    'Сокет (хост:порт)',
+    placeholderSocket: 'напр.: example.com:443 или [::1]:443',
+    labelSni:       'SNI (необязательно)',
+    placeholderSni: 'напр.: example.com',
+    labelTimeout:   'Таймаут',
+    labelRawCert:   'Данные сертификата (PEM / DER)',
+    placeholderRaw: '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+    btnUpload:      'Загрузить файл',
+    uploadHint:     'Принимает .pem .crt .cer .der · или вставьте содержимое выше',
+    btnSend:        'Проверить',
+    panelResults:   'Результаты',
+    warnNoSocket:   '⚠ Введите адрес сокета (хост:порт)',
+    warnNoRaw:      '⚠ Вставьте или загрузите сертификат',
+    certCount:      n => `${n} сертификат(ов)`,
+    certOf:         (i,n) => `Сертификат ${i} из ${n}`,
+    labelLeaf:      'Конечный', labelIntermediate: 'Промежуточный', labelRoot: 'Корневой',
+    labelSubject:   'Субъект', labelIssuer: 'Эмитент',
+    labelValidity:  'Срок действия', labelSerial: 'Серийный номер',
+    labelAlgo:      'Алгоритм подписи', labelPubKey: 'Открытый ключ',
+    labelSAN:       'Альтернативные имена', labelKeyUsage: 'Использование ключа',
+    labelExtKeyUsage:'Расширенное использование ключа', labelFingerprints: 'Отпечатки',
+    labelFlags:     'Атрибуты',
+    labelRawPem:    'Raw PEM', copyBtn: 'Копировать', copiedBtn: 'Скопировано!',
+    valid:          'Действителен', expired: 'Просрочен',
+    daysLeft:       n => `осталось ${n} день(дней)`,
+    daysExpired:    n => `просрочен ${n} день(дней) назад`,
+    selfSigned:     'Самоподписанный', isCA: 'CA',
+    critical:       'критический',
+    noCerts:        'Сертификаты не найдены.',
+    errBadge:       'ОШИБКА',
+    loadingLabel:   'Проверка сертификата…',
+    resultsReady:   n => `Проверка завершена, ${n} сертификат(ов).`,
+    skipLink:       'Перейти к основному содержимому',
+  },
+  ur: {
+    dir:'rtl',
+    title:          'سرٹیفکیٹ انسپکٹر',
+    subtitle:       'سائبر سیکیورٹی · X.509 سرٹیفکیٹ تجزیہ',
+    themeLight:     'روشن', themeDark: 'تاریک',
+    panelParams:    'معائنہ کے پیرامیٹرز',
+    tabSocket:      'ساکٹ', tabRaw: 'خام سرٹیفکیٹ',
+    labelSocket:    'ساکٹ (ہوسٹ:پورٹ)',
+    placeholderSocket: 'مثلاً: example.com:443',
+    labelSni:       'SNI (اختیاری)',
+    placeholderSni: 'مثلاً: example.com',
+    labelTimeout:   'ٹائم آؤٹ',
+    labelRawCert:   'سرٹیفکیٹ ڈیٹا (PEM / DER)',
+    placeholderRaw: '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+    btnUpload:      'فائل اپلوڈ کریں',
+    uploadHint:     '.pem .crt .cer .der قبول · یا اوپر مواد چسپاں کریں',
+    btnSend:        'معائنہ کریں',
+    panelResults:   'نتائج',
+    warnNoSocket:   '⚠ ساکٹ پتہ درج کریں (ہوسٹ:پورٹ)',
+    warnNoRaw:      '⚠ سرٹیفکیٹ چسپاں یا اپلوڈ کریں',
+    certCount:      n => `${n} سرٹیفکیٹ`,
+    certOf:         (i,n) => `${n} میں سے ${i}واں سرٹیفکیٹ`,
+    labelLeaf:      'پتی', labelIntermediate: 'درمیانی', labelRoot: 'جڑ',
+    labelSubject:   'موضوع', labelIssuer: 'جاری کنندہ',
+    labelValidity:  'درستگی', labelSerial: 'سیریل نمبر',
+    labelAlgo:      'دستخط الگورتھم', labelPubKey: 'پبلک کلید',
+    labelSAN:       'متبادل نام', labelKeyUsage: 'کلید استعمال',
+    labelExtKeyUsage:'توسیعی کلید استعمال', labelFingerprints: 'فنگر پرنٹس',
+    labelFlags:     'خصوصیات',
+    labelRawPem:    'Raw PEM', copyBtn: 'کاپی', copiedBtn: 'کاپی ہو گیا!',
+    valid:          'درست', expired: 'میعاد ختم',
+    daysLeft:       n => `${n} دن باقی`,
+    daysExpired:    n => `${n} دن پہلے ختم`,
+    selfSigned:     'خود دستخط شدہ', isCA: 'CA',
+    critical:       'نازک',
+    noCerts:        'کوئی سرٹیفکیٹ نہیں ملا۔',
+    errBadge:       'خطا',
+    loadingLabel:   'سرٹیفکیٹ کا معائنہ ہو رہا ہے…',
+    resultsReady:   n => `معائنہ مکمل، ${n} سرٹیفکیٹ۔`,
+    skipLink:       'مرکزی مواد پر جائیں',
+  },
+  vi: {
+    dir:'ltr',
+    title:          'Trình Kiểm Tra Chứng Chỉ',
+    subtitle:       'An ninh mạng · Phân tích chứng chỉ X.509',
+    themeLight:     'Sáng', themeDark: 'Tối',
+    panelParams:    'Tham số kiểm tra',
+    tabSocket:      'Socket', tabRaw: 'Chứng chỉ thô',
+    labelSocket:    'Socket (máy chủ:cổng)',
+    placeholderSocket: 'vd: example.com:443 hoặc [::1]:443',
+    labelSni:       'SNI (tùy chọn)',
+    placeholderSni: 'vd: example.com',
+    labelTimeout:   'Thời gian chờ',
+    labelRawCert:   'Dữ liệu chứng chỉ (PEM / DER)',
+    placeholderRaw: '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+    btnUpload:      'Tải lên tệp',
+    uploadHint:     'Chấp nhận .pem .crt .cer .der · hoặc dán nội dung ở trên',
+    btnSend:        'Kiểm tra',
+    panelResults:   'Kết quả',
+    warnNoSocket:   '⚠ Nhập địa chỉ socket (máy chủ:cổng)',
+    warnNoRaw:      '⚠ Dán hoặc tải lên chứng chỉ',
+    certCount:      n => `${n} chứng chỉ`,
+    certOf:         (i,n) => `Chứng chỉ ${i} trong ${n}`,
+    labelLeaf:      'Lá', labelIntermediate: 'Trung gian', labelRoot: 'Gốc',
+    labelSubject:   'Chủ thể', labelIssuer: 'Tổ chức cấp',
+    labelValidity:  'Hiệu lực', labelSerial: 'Số sê-ri',
+    labelAlgo:      'Thuật toán chữ ký', labelPubKey: 'Khóa công khai',
+    labelSAN:       'Tên thay thế', labelKeyUsage: 'Sử dụng khóa',
+    labelExtKeyUsage:'Sử dụng khóa mở rộng', labelFingerprints: 'Dấu vân tay',
+    labelFlags:     'Thuộc tính',
+    labelRawPem:    'Raw PEM', copyBtn: 'Sao chép', copiedBtn: 'Đã sao chép!',
+    valid:          'Hợp lệ', expired: 'Hết hạn',
+    daysLeft:       n => `còn ${n} ngày`,
+    daysExpired:    n => `hết hạn ${n} ngày trước`,
+    selfSigned:     'Tự ký', isCA: 'CA',
+    critical:       'quan trọng',
+    noCerts:        'Không tìm thấy chứng chỉ.',
+    errBadge:       'LỖI',
+    loadingLabel:   'Đang kiểm tra chứng chỉ…',
+    resultsReady:   n => `Kiểm tra hoàn tất, ${n} chứng chỉ.`,
+    skipLink:       'Chuyển đến nội dung chính',
+  },
+  'zh-CN': {
+    dir:'ltr',
+    title:          '证书检查器',
+    subtitle:       '网络安全 · X.509 证书分析',
+    themeLight:     '浅色', themeDark: '深色',
+    panelParams:    '检查参数',
+    tabSocket:      '套接字', tabRaw: '原始证书',
+    labelSocket:    '套接字（主机:端口）',
+    placeholderSocket: '例: example.com:443 或 [::1]:443',
+    labelSni:       'SNI（可选）',
+    placeholderSni: '例: example.com',
+    labelTimeout:   '超时',
+    labelRawCert:   '证书数据（PEM / DER）',
+    placeholderRaw: '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+    btnUpload:      '上传文件',
+    uploadHint:     '接受 .pem .crt .cer .der · 或在上方粘贴内容',
+    btnSend:        '检查',
+    panelResults:   '结果',
+    warnNoSocket:   '⚠ 请输入套接字地址（主机:端口）',
+    warnNoRaw:      '⚠ 请粘贴或上传证书',
+    certCount:      n => `${n} 个证书`,
+    certOf:         (i,n) => `第 ${i}/${n} 个证书`,
+    labelLeaf:      '叶', labelIntermediate: '中间', labelRoot: '根',
+    labelSubject:   '主体', labelIssuer: '颁发者',
+    labelValidity:  '有效期', labelSerial: '序列号',
+    labelAlgo:      '签名算法', labelPubKey: '公钥',
+    labelSAN:       '备用名称', labelKeyUsage: '密钥用法',
+    labelExtKeyUsage:'扩展密钥用法', labelFingerprints: '指纹',
+    labelFlags:     '属性',
+    labelRawPem:    'Raw PEM', copyBtn: '复制', copiedBtn: '已复制!',
+    valid:          '有效', expired: '已过期',
+    daysLeft:       n => `剩余 ${n} 天`,
+    daysExpired:    n => `已过期 ${n} 天`,
+    selfSigned:     '自签名', isCA: 'CA',
+    critical:       '关键',
+    noCerts:        '未找到证书。',
+    errBadge:       '错误',
+    loadingLabel:   '正在检查证书…',
+    resultsReady:   n => `检查完成，${n} 个证书。`,
+    skipLink:       '跳转到主要内容',
+  },
+};
+
+// ══════════════════════════════════════════════════════════════════
+// LANGUAGE DETECTION
+// ══════════════════════════════════════════════════════════════════
+const SUPPORTED = Object.keys(LANGS);
+
+function detectLang() {
+  const navLangs = Array.from(navigator.languages || [navigator.language || 'en']);
+  for (const l of navLangs) {
+    if (SUPPORTED.includes(l)) return l;
+    const base = l.split('-')[0];
+    const match = SUPPORTED.find(s => s === base || s.startsWith(base + '-'));
+    if (match) return match;
+  }
+  return 'en';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// THEME
+// ══════════════════════════════════════════════════════════════════
+const html       = document.documentElement;
+const themeBtn   = document.getElementById('theme-toggle');
+const themeLabel = document.getElementById('theme-label');
+const themeIcon  = document.getElementById('theme-icon');
+let currentLang  = 'en';
+let isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+applyTheme(isDark);
+
+themeBtn.addEventListener('click', () => { isDark = !isDark; applyTheme(isDark); });
+themeBtn.addEventListener('keydown', e => {
+  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); themeBtn.click(); }
+});
+
+function applyTheme(dark) {
+  html.dataset.theme = dark ? 'dark' : 'light';
+  themeBtn.setAttribute('aria-checked', dark ? 'false' : 'true');
+  const t = LANGS[currentLang] || LANGS.en;
+  themeLabel.textContent = dark ? t.themeLight : t.themeDark;
+  themeIcon.textContent  = dark ? '☀️' : '🌙';
+  themeBtn.setAttribute('aria-label', `${dark ? t.themeLight : t.themeDark} — toggle color theme`);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TRANSLATIONS
+// ══════════════════════════════════════════════════════════════════
+function applyLang(lang) {
+  currentLang = lang;
+  const t = LANGS[lang] || LANGS.en;
+  const dir = t.dir || 'ltr';
+
+  html.lang = lang;
+  html.dir  = dir;
+  document.body.dir = dir;
+
+  const skipLink = document.getElementById('skip-link');
+  if (skipLink) skipLink.textContent = t.skipLink || 'Skip to main content';
+
+  document.getElementById('hdr-title').textContent        = t.title;
+  document.getElementById('hdr-subtitle').textContent     = t.subtitle;
+  document.getElementById('ph-params').textContent        = t.panelParams;
+  document.getElementById('tab-socket').textContent       = t.tabSocket;
+  document.getElementById('tab-raw').textContent          = t.tabRaw;
+  document.getElementById('lbl-socket').textContent       = t.labelSocket;
+  document.getElementById('socket-input').placeholder     = t.placeholderSocket;
+  document.getElementById('lbl-sni').textContent          = t.labelSni;
+  document.getElementById('sni-input').placeholder        = t.placeholderSni;
+  document.getElementById('lbl-timeout').textContent      = t.labelTimeout;
+  document.getElementById('lbl-rawcert').textContent      = t.labelRawCert;
+  document.getElementById('raw-cert').placeholder         = t.placeholderRaw;
+  document.getElementById('btn-upload-label').textContent = t.btnUpload;
+  document.getElementById('upload-hint').textContent      = t.uploadHint;
+  document.getElementById('btn-send-label').textContent   = t.btnSend;
+  document.getElementById('ph-results').textContent       = t.panelResults;
+
+  document.getElementById('lang-select-label').textContent =
+    dir === 'rtl' ? 'اللغة' : 'Language';
+
+  applyTheme(isDark);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// LANGUAGE INIT
+// ══════════════════════════════════════════════════════════════════
+const langSel  = document.getElementById('lang-select');
+const initLang = detectLang();
+langSel.value  = SUPPORTED.includes(initLang) ? initLang : 'en';
+applyLang(langSel.value);
+langSel.addEventListener('change', () => applyLang(langSel.value));
+
+// ══════════════════════════════════════════════════════════════════
+// MODE TABS
+// ══════════════════════════════════════════════════════════════════
+let activeMode = 'socket';
+const modeTabs = Array.from(document.querySelectorAll('.mode-tab'));
+
+modeTabs.forEach(btn => {
+  btn.addEventListener('click', () => activateMode(btn.dataset.tab, btn));
+  btn.addEventListener('keydown', e => {
+    const dir = html.dir === 'rtl' ? -1 : 1;
+    let idx = modeTabs.indexOf(e.currentTarget);
+    if (e.key === 'ArrowRight') { e.preventDefault(); idx = (idx + dir + modeTabs.length) % modeTabs.length; modeTabs[idx].focus(); }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); idx = (idx - dir + modeTabs.length) % modeTabs.length; modeTabs[idx].focus(); }
+    if (e.key === 'Home') { e.preventDefault(); modeTabs[0].focus(); }
+    if (e.key === 'End')  { e.preventDefault(); modeTabs[modeTabs.length-1].focus(); }
+  });
+});
+
+function activateMode(modeId, btn) {
+  activeMode = modeId;
+  modeTabs.forEach(b => { b.setAttribute('aria-selected', 'false'); b.tabIndex = -1; });
+  document.querySelectorAll('.mode-pane').forEach(p => { p.classList.remove('active'); p.hidden = true; });
+  btn.setAttribute('aria-selected', 'true');
+  btn.tabIndex = 0;
+  const pane = document.getElementById('pane-' + modeId);
+  pane.classList.add('active');
+  pane.hidden = false;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TIMEOUT SLIDER
+// ══════════════════════════════════════════════════════════════════
+const slider     = document.getElementById('timeout-slider');
+const timeoutVal = document.getElementById('timeout-val');
+slider.addEventListener('input', () => {
+  const v = slider.value;
+  timeoutVal.textContent = v + ' s';
+  slider.setAttribute('aria-valuenow', v);
+  slider.setAttribute('aria-valuetext', v + ' seconds');
+});
+
+// ══════════════════════════════════════════════════════════════════
+// FILE UPLOAD
+// ══════════════════════════════════════════════════════════════════
+const btnUpload   = document.getElementById('btn-upload');
+const fileInput   = document.getElementById('cert-file-input');
+const rawTextarea = document.getElementById('raw-cert');
+
+btnUpload.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    rawTextarea.value = ev.target.result;
+    rawTextarea.dispatchEvent(new Event('input'));
+  };
+  reader.readAsText(file, 'utf-8');
+  // Reset so same file can be re-uploaded
+  fileInput.value = '';
+});
+
+// ══════════════════════════════════════════════════════════════════
+// SUBMIT
+// ══════════════════════════════════════════════════════════════════
+const certForm = document.getElementById('cert-form');
+const btn      = document.getElementById('btn-query');
+const hint     = document.getElementById('query-hint');
+const srStatus = document.getElementById('sr-status');
+
+certForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const t = LANGS[currentLang] || LANGS.en;
+
+  let payload = {};
+  let valid = true;
+
+  if (activeMode === 'socket') {
+    const socketVal = document.getElementById('socket-input').value.trim();
+    const socketInput = document.getElementById('socket-input');
+    if (!socketVal) {
+      socketInput.focus();
+      socketInput.setAttribute('aria-invalid', 'true');
+      hint.textContent = t.warnNoSocket;
+      hint.style.color = 'var(--warn)';
+      hint.setAttribute('role', 'alert');
+      valid = false;
+    } else {
+      socketInput.setAttribute('aria-invalid', 'false');
+      payload.socket = socketVal;
+      const sniVal = document.getElementById('sni-input').value.trim();
+      if (sniVal) payload.sni = sniVal;
+      payload.timeout = parseInt(slider.value);
+    }
+  } else {
+    const rawVal = rawTextarea.value.trim();
+    if (!rawVal) {
+      rawTextarea.focus();
+      rawTextarea.setAttribute('aria-invalid', 'true');
+      hint.textContent = t.warnNoRaw;
+      hint.style.color = 'var(--warn)';
+      hint.setAttribute('role', 'alert');
+      valid = false;
+    } else {
+      rawTextarea.setAttribute('aria-invalid', 'false');
+      payload.raw_cert_data = rawVal;
+    }
+  }
+
+  if (!valid) return;
+  hint.textContent = '';
+  hint.removeAttribute('role');
+
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.setAttribute('aria-busy', 'true');
+  srStatus.textContent = t.loadingLabel;
+
+  const t0 = performance.now();
+
+  try {
+    const res = await fetch('/api/v1/certinfo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+    const data = await res.json();
+    renderResults(data, payload, elapsed);
+    const count = data.answers ? data.answers.length : 0;
+    srStatus.textContent = t.resultsReady(count);
+  } catch (err) {
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+    renderError(err, payload, elapsed);
+    srStatus.textContent = String(err);
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.removeAttribute('aria-busy');
+  }
+});
+
+// Enter key in socket input
+document.getElementById('socket-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); certForm.requestSubmit(); }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// RENDER RESULTS
+// ══════════════════════════════════════════════════════════════════
+function renderResults(data, payload, elapsed) {
+  const panel = document.getElementById('results-panel');
+  const body  = document.getElementById('results-body');
+  const t = LANGS[currentLang] || LANGS.en;
+  panel.style.display = 'block';
+
+  const result = (data.result || 'ERROR').toUpperCase();
+  const certs  = data.answers || [];
+
+  // Badge
+  const badgeClass = result === 'SUCCESS' ? 'badge-success'
+                   : ['NOTFOUND','TLS_ERROR','NO_CERTIFICATES'].includes(result) ? 'badge-warn'
+                   : 'badge-error';
+
+  // Source string
+  let sourceStr = '';
+  if (data.source) {
+    const s = data.source;
+    if (s.type === 'SOCKET') {
+      sourceStr = s.sni ? `${s.sni} (${s.address})` : s.address;
+    } else {
+      sourceStr = `RAW · ${s.format || '?'} · ${s.cert_count} cert(s)`;
+    }
+  } else if (payload.socket) {
+    sourceStr = payload.socket;
+  } else {
+    sourceStr = 'RAW';
+  }
+
+  // Content
+  let content = '';
+  if (result !== 'SUCCESS' || certs.length === 0) {
+    const msg = data.message || t.noCerts;
+    content = `<div class="no-answer" role="status">${esc(result)}: ${esc(msg)}</div>`;
+  } else {
+    content = certs.map((cert, i) => renderCertCard(cert, i, certs.length, t)).join('');
+  }
+
+  body.innerHTML = `
+    <div class="result-meta" role="region" aria-label="${esc(t.panelResults)}">
+      <span class="badge ${badgeClass}" aria-label="Status: ${esc(result)}">${esc(result)}</span>
+      <span class="result-query-str">${esc(sourceStr)}</span>
+      <span class="result-time">${elapsed}s · ${t.certCount(certs.length)}</span>
+    </div>${content}`;
+
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  panel.setAttribute('tabindex', '-1');
+  panel.focus({ preventScroll: true });
+}
+
+function renderCertCard(cert, index, total, t) {
+  // Determine cert role
+  let role, roleBadgeClass;
+  if (index === 0 && !cert.is_ca) {
+    role = t.labelLeaf; roleBadgeClass = 'badge-neutral';
+  } else if (cert.is_ca && index === total - 1) {
+    role = t.labelRoot; roleBadgeClass = 'badge-warn';
+  } else if (cert.is_ca) {
+    role = t.labelIntermediate; roleBadgeClass = 'badge-warn';
+  } else {
+    role = t.labelLeaf; roleBadgeClass = 'badge-neutral';
+  }
+
+  // Validity
+  const v = cert.validity;
+  const daysLeft = v.days_left;
+  let validBadge, validBadgeClass;
+  if (v.is_expired) {
+    validBadge = t.daysExpired(Math.abs(daysLeft));
+    validBadgeClass = 'badge-error';
+  } else if (daysLeft < 30) {
+    validBadge = t.daysLeft(daysLeft);
+    validBadgeClass = 'badge-warn';
+  } else {
+    validBadge = t.daysLeft(daysLeft);
+    validBadgeClass = 'badge-success';
+  }
+
+  // Format dates
+  const notBefore = fmtDate(v.not_before);
+  const notAfter  = fmtDate(v.not_after);
+
+  // Subject CN for header
+  const subjectCN = cert.subject.common_name || cert.subject.raw || '';
+
+  // Build field rows
+  const rows = [];
+  rows.push(fieldRow(t.labelSubject, cert.subject.raw));
+  rows.push(fieldRow(t.labelIssuer, cert.issuer.raw));
+  rows.push(fieldRow(t.labelValidity, `${notBefore} → ${notAfter}`));
+  rows.push(fieldRow(t.labelSerial, cert.serial_number));
+  rows.push(fieldRow(t.labelAlgo, cert.signature_algorithm));
+
+  // Public key
+  const pk = cert.public_key_info;
+  let pkStr = `${pk.algorithm} ${pk.key_size_bits}-bit`;
+  if (pk.curve)    pkStr += ` (${pk.curve})`;
+  if (pk.exponent) pkStr += ` · e=${pk.exponent}`;
+  rows.push(fieldRow(t.labelPubKey, pkStr));
+
+  // SANs
+  const san = cert.extensions && cert.extensions.subject_alternative_name;
+  if (san) {
+    const sanList = [];
+    if (san.dns_names)      san.dns_names.forEach(n => sanList.push(`DNS:${n}`));
+    if (san.ip_addresses)   san.ip_addresses.forEach(n => sanList.push(`IP:${n}`));
+    if (san.email_addresses)san.email_addresses.forEach(n => sanList.push(`Email:${n}`));
+    if (san.uris)           san.uris.forEach(n => sanList.push(`URI:${n}`));
+    if (sanList.length) {
+      const tags = sanList.map(s => `<span class="cert-tag">${esc(s)}</span>`).join('');
+      rows.push(fieldRowRaw(t.labelSAN, `<div class="tag-list">${tags}</div>`));
+    }
+  }
+
+  // Key Usage
+  const ku = cert.extensions && cert.extensions.key_usage;
+  if (ku && ku.usages && ku.usages.length) {
+    let kuStr = ku.usages.join(', ');
+    if (ku.critical) kuStr += ` (${t.critical})`;
+    rows.push(fieldRow(t.labelKeyUsage, kuStr));
+  }
+
+  // Extended Key Usage
+  const eku = cert.extensions && cert.extensions.extended_key_usage;
+  if (eku && eku.usages && eku.usages.length) {
+    rows.push(fieldRow(t.labelExtKeyUsage, eku.usages.join(', ')));
+  }
+
+  // Fingerprints
+  const fp = cert.fingerprints;
+  rows.push(fieldRowRaw(t.labelFingerprints, `
+    <div class="fp-row"><span class="fp-alg">SHA-1</span>${esc(fp.sha1)}</div>
+    <div class="fp-row"><span class="fp-alg">SHA-256</span>${esc(fp.sha256)}</div>`));
+
+  // Flags
+  const flags = [];
+  if (cert.is_self_signed) flags.push(t.selfSigned);
+  if (cert.is_ca)          flags.push(t.isCA);
+  if (flags.length) {
+    const tags = flags.map(f => `<span class="cert-tag">${esc(f)}</span>`).join('');
+    rows.push(fieldRowRaw(t.labelFlags, `<div class="tag-list">${tags}</div>`));
+  }
+
+  // Raw PEM (collapsible)
+  if (cert.raw) {
+    const copyLabel = esc(t.copyBtn || 'Copy');
+    const pemLabel  = esc(t.labelRawPem || 'Raw PEM');
+    const pemEscaped = esc(cert.raw);
+    rows.push(fieldRowRaw(t.labelRawPem || 'Raw PEM', `
+      <details class="pem-details">
+        <summary class="pem-summary">
+          <span class="pem-arrow">&#9658;</span>
+          <span>${pemLabel}</span>
+          <button class="pem-copy-btn" type="button"
+                  data-pem="${pemEscaped}"
+                  onclick="copyPEM(event, this)"
+                  aria-label="Copy PEM certificate">
+            ${copyLabel}
+          </button>
+        </summary>
+        <pre class="pem-content" aria-label="PEM certificate">${pemEscaped}</pre>
+      </details>`));
+  }
+
+  return `
+    <div class="cert-card" aria-label="${esc(t.certOf(index+1, total))}">
+      <div class="cert-card-header">
+        <span class="cert-index">${esc(t.certOf(index+1, total))}</span>
+        <span class="cert-subject-cn" title="${esc(subjectCN)}">${esc(subjectCN)}</span>
+        <span class="badge ${roleBadgeClass}" style="font-size:0.58rem;padding:2px 7px">${esc(role)}</span>
+        <span class="badge ${validBadgeClass} cert-validity-badge" style="font-size:0.58rem;padding:2px 7px">${esc(validBadge)}</span>
+      </div>
+      <div class="cert-card-body">
+        ${rows.join('')}
+      </div>
+    </div>`;
+}
+
+function fieldRow(label, value) {
+  return `<div class="cert-field">
+    <div class="cert-field-label">${esc(label)}</div>
+    <div class="cert-field-value">${esc(String(value))}</div>
+  </div>`;
+}
+
+function fieldRowRaw(label, html) {
+  return `<div class="cert-field">
+    <div class="cert-field-label">${esc(label)}</div>
+    <div class="cert-field-value">${html}</div>
+  </div>`;
+}
+
+function renderError(err, payload, elapsed) {
+  const panel = document.getElementById('results-panel');
+  const body  = document.getElementById('results-body');
+  const t = LANGS[currentLang] || LANGS.en;
+  panel.style.display = 'block';
+  body.innerHTML = `
+    <div class="result-meta">
+      <span class="badge badge-error">${t.errBadge}</span>
+      <span class="result-query-str">${esc(payload.socket || 'RAW')}</span>
+      <span class="result-time">${elapsed}s</span>
+    </div>
+    <div class="raw-block" role="alert" style="color:var(--err)">${esc(String(err))}</div>`;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  panel.setAttribute('tabindex', '-1');
+  panel.focus({ preventScroll: true });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// COPY PEM
+// ══════════════════════════════════════════════════════════════════
+function copyPEM(event, btn) {
+  event.stopPropagation();
+  const pem = btn.getAttribute('data-pem')
+                 .replace(/&amp;/g,'&').replace(/&lt;/g,'<')
+                 .replace(/&gt;/g,'>').replace(/&quot;/g,'"')
+                 .replace(/&#39;/g,"'");
+  const t = LANGS[currentLang] || LANGS.en;
+  navigator.clipboard.writeText(pem).then(() => {
+    btn.textContent = t.copiedBtn || 'Copied!';
+    btn.classList.add('pem-copied');
+    setTimeout(() => {
+      btn.textContent = t.copyBtn || 'Copy';
+      btn.classList.remove('pem-copied');
+    }, 2000);
+  }).catch(() => {
+    // Fallback for older browsers
+    const ta = document.createElement('textarea');
+    ta.value = pem;
+    ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = t.copiedBtn || 'Copied!';
+    btn.classList.add('pem-copied');
+    setTimeout(() => {
+      btn.textContent = t.copyBtn || 'Copy';
+      btn.classList.remove('pem-copied');
+    }, 2000);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════════════
+const esc = s => String(s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString(currentLang, {
+      year:'numeric', month:'short', day:'numeric'
+    });
+  } catch { return iso; }
+}
+</script>
+</body>
+</html>

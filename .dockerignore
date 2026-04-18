@@ -1,0 +1,37 @@
+# Build output
+out/
+
+# Documentation
+README.md
+CLAUDE.md
+docs/
+
+# API source (openapi.json is embedded from cmd/http2cert/static/)
+api/
+
+# Scripts (not needed inside the image)
+scripts/
+
+# Git
+.git/
+.gitignore
+
+# Editor and IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.*
+
+# Go test artifacts
+*.test
+coverage.html
+coverage.txt
